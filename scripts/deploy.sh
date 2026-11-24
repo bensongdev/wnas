@@ -76,6 +76,19 @@ else
   fi
 fi
 
+# 서버가 있으면 배포 URL의 헬스 체크로 DB 연결을 확인한다.
+HEALTH="NOT RUN (서버 없음 또는 배포 실패)"
+if [[ -f app/api/health/route.ts && "${URL:-}" =~ ^https:// ]]; then
+  BYPASS=(); if [[ -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]]; then BYPASS=(-H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET"); fi
+  BODY="$(curl -s "${BYPASS[@]+"${BYPASS[@]}"}" -w ' %{http_code}' "$URL/api/health")"
+  case "$BODY" in
+    *'"db":"ok"'*' 200') HEALTH="PASS (DB 연결됨)" ;;
+    *'"db":"not-configured"'*) HEALTH="FAIL (DB 미연결: Vercel 프로젝트에 Neon Postgres를 연결하세요)"; STATUS=1 ;;
+    *sso-api*|*' 30'[0-9]|*' 401') HEALTH="UNVERIFIED (배포 보호 때문에 확인 못 함)"; STATUS=1 ;;
+    *) HEALTH="FAIL (응답: ${BODY:0:120})"; STATUS=1 ;;
+  esac
+fi
+
 if [[ $STATUS -eq 0 ]]; then OVERALL=PASS; else OVERALL=FAIL; fi
 {
   echo "# 배포 보고서"
@@ -86,7 +99,8 @@ if [[ $STATUS -eq 0 ]]; then OVERALL=PASS; else OVERALL=FAIL; fi
   echo "- 커밋: $(git rev-parse --short HEAD 2>/dev/null || echo 없음)$([[ -n "$(git status --porcelain 2>/dev/null)" ]] && echo ' (커밋하지 않은 변경 포함)')"
   echo "- 배포 전 검증: $VERIFY"
   echo "- 배포: $DEPLOY"
-  echo "- 배포 URL E2E: $SMOKE"
+  echo "- 배포 URL E2E: $SMOKE (데이터를 쓰는 테스트는 배포 URL에서 건너뜀)"
+  echo "- 헬스 체크 (/api/health): $HEALTH"
   echo "- 화면 검토: PENDING (배포 URL의 스크린샷을 직접 열어 확인하세요)"
   if [[ -s "$OUT/e2e-screenshots.md" ]]; then echo; echo "## 스크린샷"; cat "$OUT/e2e-screenshots.md"; fi
   if [[ -s "$OUT/e2e-failures.md" ]]; then echo; echo "## 실패한 테스트"; cat "$OUT/e2e-failures.md"; fi

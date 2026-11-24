@@ -24,6 +24,7 @@ let passed = 0;
 let failed = 0;
 let skipped = 0;
 const shots = [];
+const apis = [];
 const stray = [];
 const diagnostics = [];
 const failures = [];
@@ -50,6 +51,17 @@ function visit(suite, parents) {
             const dest = join(dir, `${a.name}.png`);
             copyFileSync(a.path, dest);
             shots.push(dest.slice(runDir.length + 1));
+          } else if (
+            SHOT_NAME.test(a.name) &&
+            a.contentType === "application/json" &&
+            a.path &&
+            existsSync(a.path)
+          ) {
+            const dir = join(runDir, "api", t.projectName, slug(title));
+            mkdirSync(dir, { recursive: true });
+            const dest = join(dir, `${a.name}.json`);
+            copyFileSync(a.path, dest);
+            apis.push(dest.slice(runDir.length + 1));
           } else if (DIAGNOSTIC.has(a.name) && r.status !== "passed" && a.path && existsSync(a.path)) {
             const dir = join(runDir, "failures", t.projectName, slug(title));
             mkdirSync(dir, { recursive: true });
@@ -69,6 +81,7 @@ for (const s of report.suites ?? []) visit(s, []);
 
 const list = (items) => items.map((i) => `- ${i}`).join("\n") + (items.length ? "\n" : "");
 writeFileSync(join(runDir, "e2e-screenshots.md"), list(shots));
+writeFileSync(join(runDir, "e2e-api.md"), list(apis));
 writeFileSync(join(runDir, "e2e-stray.md"), list(stray));
 writeFileSync(join(runDir, "e2e-diagnostics.md"), list(diagnostics));
 writeFileSync(join(runDir, "e2e-failures.md"), list(failures));
@@ -80,6 +93,7 @@ console.log(`PASSED=${passed}`);
 console.log(`FAILED=${failed}`);
 console.log(`SKIPPED=${skipped}`);
 console.log(`SHOTS=${shots.length}`);
+console.log(`API=${apis.length}`);
 console.log(`STRAY=${stray.length}`);
 console.log(`DIAGNOSTICS=${diagnostics.length}`);
 console.log(`GLOBAL_ERRORS=${errors.length}`);

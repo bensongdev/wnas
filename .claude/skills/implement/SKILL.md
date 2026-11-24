@@ -23,7 +23,9 @@ disable-model-invocation: true
 
 - `AGENTS.md`의 아키텍처·완료 정의·테스트 작성 규칙을 따른다. Next.js API를 쓰기 전에 `node_modules/next/dist/docs/`의 해당 문서를 읽는다(학습한 내용과 버전이 다를 수 있다).
 - 명세의 수용 기준(`F-n.AC-n`)마다 테스트를 만든다. 테스트 이름에 해당 수용 기준 번호를 적는다(예: `test("F-1.AC-2: ...")`).
-- 로직은 `lib/`에 두고 Vitest로, 화면 흐름은 `e2e/`의 Playwright 테스트로 검증한다. 스크린샷은 assertion 뒤에 `capture(page, testInfo, "NN-상태-설명")`로 남기고, 이름은 테스트 계획 표에 적힌 이름을 그대로 쓴다.
+- 로직은 `lib/`에 두고 Vitest로, 화면 흐름은 `e2e/`의 Playwright 테스트로 검증한다.
+- 서버 기능: 입력 검증은 `lib/`의 zod 스키마, DB 접근은 `lib/db/`, 저장소·라우트 핸들러는 통합 테스트(`// @vitest-environment node` + `setupTestDb()`, 예: `app/api/memos/route.test.ts`), API는 E2E에서 상태 코드·본문을 확인한 뒤 `attachJson`으로 남긴다. 스키마를 바꾸면 `npm run db:generate`. 데이터를 지우는 마이그레이션이면 멈추고 승인을 요청한다.
+- 명세가 `서버: 없음`인데 서버 기능이 필요해 보이면 구현하지 않고 `/spec`으로 명세 변경을 제안한다. 스크린샷은 assertion 뒤에 `capture(page, testInfo, "NN-상태-설명")`로 남기고, 이름은 테스트 계획 표에 적힌 이름을 그대로 쓴다.
 - 명세에 없는 기능, 외부 서비스, npm 패키지, 환경 변수는 추가하지 않는다. 필요해 보이면 멈추고 `/spec`으로 명세 변경을 제안한다.
 - 명세 자체(수용 기준, 범위)를 바꾸지 않는다.
 

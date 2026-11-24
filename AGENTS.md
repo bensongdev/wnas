@@ -14,6 +14,18 @@
 - 비밀 값은 `.env.local`(Git 제외)에만 둔다. `NEXT_PUBLIC_`로 시작하는 변수는 브라우저에 그대로 노출되므로 비밀 값에 쓰지 않는다.
 - 비밀 정보나 개인 데이터를 소스 관리, 로그, 스크린샷, 생성된 보고서에 절대 넣지 않는다.
 
+## 서버와 DB (서버가 있는 프로젝트)
+
+- 모든 입력은 서버에서 검증한다(`lib/`의 zod 스키마). 브라우저의 검사(필수 입력, 길이 제한)는 편의일 뿐 믿지 않는다.
+- Server Action과 API 라우트는 누구나 호출할 수 있는 공개 엔드포인트다. 로그인이 생기면 액션·라우트 안에서 권한을 확인한다.
+- DB 접근은 `lib/db/`에서만 한다. 클라이언트 컴포넌트에서 `lib/db`를 import하지 않는다.
+- 오류 응답에 내부 오류(쿼리, 스택, 경로)를 넣지 않는다(`lib/http.ts`). 자세한 내용은 서버 로그에만 남긴다.
+- 요청마다 DB를 읽는 서버 컴포넌트와 GET 라우트는 `await connection()`을 먼저 부른다(빌드 때 미리 그리지 않게). 변경 후에는 `refresh()` 등으로 화면을 갱신한다.
+- 스키마(`lib/db/schema.ts`)를 바꾸면 `npm run db:generate`로 마이그레이션을 만들어 함께 커밋한다. 이미 커밋한 마이그레이션 파일은 고치지 않는다.
+- 데이터를 지우거나 바꾸는 마이그레이션(`DROP`, `TRUNCATE`, 열 타입 변경 등)과 프로덕션 DB 작업(`db:migrate`를 배포 DB에 실행 등)은 사람의 승인을 받는다.
+- 테스트는 메모리 DB(`test/db.ts`의 `setupTestDb`)나 `verify.sh`가 만드는 실행별 DB만 쓴다. 사용자의 `.data/`나 배포 DB를 테스트에 쓰지 않는다.
+- 배포 URL을 검사하는 E2E(`WNAS_BASE_URL`)에서는 데이터를 쓰는 테스트를 건너뛴다.
+
 ## 제품 명세
 
 - 기능 구현은 `docs/PRODUCT_SPEC.md`가 `scripts/check-spec.sh`를 통과(상태 `승인`, 미결 질문 없음)할 때, 그 명세에 있는 기능(`F-n`)만 한다. 통과하지 못하면 구현하지 않고 이유를 보고한다.
@@ -27,7 +39,7 @@
 1. 구현할 기능이 승인된 명세에 있는지 확인하고, 그 수용 기준(`F-n.AC-n`)을 구현과 테스트의 기준으로 삼는다.
 2. 최소한의 변경으로 구현하고, 동작과 회귀를 검증하는 테스트를 포함한다.
 3. `scripts/verify.sh all`을 실행한다(린트·타입 검사·Prettier·빌드·단위 테스트·E2E). 브라우저는 headless라 사용자의 마우스·키보드를 쓰지 않으므로 언제든 돌려도 된다. 실행할 수 없으면 명시적으로 NOT RUN으로 보고하고, 절대 PASS라고 주장하지 않는다.
-4. 화면 상태의 증거는 E2E 테스트(`e2e/`)에서 assertion으로 상태를 확인한 뒤 `capture(page, testInfo, "NN-상태-설명")`으로 남긴다. 데스크톱과 모바일 두 화면에서 모두 실행된다.
+4. 화면 상태의 증거는 E2E 테스트(`e2e/`)에서 assertion으로 상태를 확인한 뒤 `capture(page, testInfo, "NN-상태-설명")`으로 남긴다. 데스크톱과 모바일 두 화면에서 모두 실행된다. API는 상태 코드와 본문을 assertion으로 확인한 뒤 `attachJson(testInfo, "NN-api-...", ...)`으로 남긴다.
 5. 스크린샷을 직접 열어 확인한다. 에이전트가 이미지를 볼 수 없으면 HUMAN REVIEW REQUIRED로 표시한다.
 6. 최소한 초기 상태, 변경된 상태, 그리고 해당되는 경우 오류/빈/로딩 상태의 증거를 확보한다. 기존 UI를 수정할 때는 변경 전/후를 포함한다.
 7. 검증 보고서를 제공한다: 변경 사항, 실행한 명령, PASS/FAIL/SKIPPED, 증거 경로, 한계, 위험.
@@ -60,7 +72,7 @@
 
 - 구현 내용: ...
 - 수용 기준: ...
-- 검증: lint PASS/FAIL/NOT RUN; build PASS/FAIL/NOT RUN; unit PASS/FAIL/NOT RUN; E2E PASS/FAIL/NOT RUN
+- 검증: lint PASS/FAIL/NOT RUN; DB PASS/FAIL/NOT RUN; build PASS/FAIL/NOT RUN; unit PASS/FAIL/NOT RUN; E2E PASS/FAIL/NOT RUN
 - 증거: 실행 폴더, 스크린샷 이름(데스크톱·모바일)
 - 사람 검토: required / approved
 - 남은 위험: ...

@@ -24,16 +24,24 @@ echo "명세 검사: $SPEC ($([[ $DRAFT == 1 ]] && echo 초안 || echo 승인) �
 STATUS="$(field 상태)"
 NAME="$(field '앱 이름')"
 DEPLOY="$(field 배포)"
+SERVER="$(field 서버)"
 case "$STATUS" in 초안|승인) ;; *) problem "상태가 '초안' 또는 '승인'이 아닙니다: '${STATUS}'" ;; esac
 # rename-app.sh와 같은 규칙
 [[ "$NAME" =~ ^[A-Za-z][A-Za-z0-9]*$ ]] || problem "앱 이름은 영문자/숫자만, 영문자로 시작해야 합니다: '${NAME}'"
 case "$DEPLOY" in Vercel|없음) ;; *) problem "배포는 'Vercel' 또는 '없음'이어야 합니다: '${DEPLOY}'" ;; esac
+case "$SERVER" in 있음|없음) ;; *) problem "서버는 '있음' 또는 '없음'이어야 합니다: '${SERVER}'" ;; esac
 
-for h in "원본 요구사항" "목적과 대상 사용자" "범위 밖" "기능 목록" "화면" "데이터 저장" \
+for h in "원본 요구사항" "목적과 대상 사용자" "범위 밖" "기능 목록" "화면" "API" "데이터 저장" \
          "외부 서비스·비밀 값·개인정보" "위험 요소" "미결 질문" "변경 이력" "검증 결과"; do
   printf '%s\n' "$BODY" | grep -qx "## $h" || { problem "필수 절이 없습니다: '## $h'"; continue; }
   [[ -n "$(section "$h" | grep -v '^[[:space:]]*$' || true)" ]] || problem "'## $h' 절이 비어 있습니다"
 done
+
+# 서버가 없으면 API도 없어야 한다(화면만 있는 정적 사이트로 만들어지므로).
+if [[ "$SERVER" == 없음 ]]; then
+  API_BODY="$(section API | grep -v '^[[:space:]]*$' || true)"
+  [[ "$API_BODY" == "- 없음" ]] || problem "서버: 없음인데 '## API' 절이 '- 없음'이 아닙니다"
+fi
 
 # 채우지 않은 자리 표시
 while IFS= read -r line; do problem "채우지 않은 자리 표시 (줄 ${line%%:*}): ${line#*:}"; done \
@@ -60,4 +68,4 @@ if [[ $DRAFT == 0 ]]; then
 fi
 
 if [[ $PROBLEMS -gt 0 ]]; then echo "결과: FAIL (문제 ${PROBLEMS}건)"; exit 1; fi
-echo "결과: PASS (앱 이름 $NAME, 배포 $DEPLOY, 기능 $(printf '%s\n' "$FEATURES" | wc -l | tr -d ' ')개)"
+echo "결과: PASS (앱 이름 $NAME, 배포 $DEPLOY, 서버 $SERVER, 기능 $(printf '%s\n' "$FEATURES" | wc -l | tr -d ' ')개)"

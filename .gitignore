@@ -45,3 +45,6 @@ next-env.d.ts
 
 # WNAS 검증 증거
 /.artifacts/
+
+# 로컬 개발 DB (PGlite)
+/.data/

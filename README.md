@@ -27,33 +27,37 @@ npm run dev                           # 개발 서버: http://localhost:3000
 
 `verify.sh`는 실행마다 `.artifacts/runs/<시각>/`에 결과를 남기고 `verification.md`를 출력합니다.
 
-| 단계        | 도구                                                               | 실패 조건                                    |
-| ----------- | ------------------------------------------------------------------ | -------------------------------------------- |
-| 린트        | ESLint(경고도 실패), `tsc --noEmit`, Prettier                      | 하나라도 실패                                |
-| 빌드        | `next build`                                                       | 빌드 실패 (경고는 개수만 보고)               |
-| 단위 테스트 | Vitest + Testing Library                                           | 실패 1개 이상 또는 0개                       |
-| E2E         | Playwright, headless Chromium, 데스크톱 1280×800 + 모바일(Pixel 7) | 실패, 0개, 스크린샷 0장, 이름 규칙 밖의 첨부 |
-| 접근성      | `@axe-core/playwright` (E2E 안에서)                                | serious 이상 위반                            |
+| 단계             | 도구                                                                               | 실패 조건                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 린트             | ESLint(경고도 실패), `tsc --noEmit`, Prettier                                      | 하나라도 실패                                                                     |
+| DB 마이그레이션  | `drizzle-kit generate`(임시 폴더), 빈 DB에 전체 적용                               | 마이그레이션 누락·적용 실패. 데이터를 지우는 마이그레이션은 "사람 승인 필요" 표시 |
+| 빌드             | `next build`                                                                       | 빌드 실패 (경고는 개수만 보고)                                                    |
+| 단위·통합 테스트 | Vitest + Testing Library, 통합은 메모리 DB(PGlite)                                 | 실패 1개 이상 또는 0개                                                            |
+| E2E              | Playwright, headless Chromium, 데스크톱 1280×800 + 모바일(Pixel 7). 실행마다 새 DB | 실패, 0개, 스크린샷 0장, 이름 규칙 밖의 첨부                                      |
+| 접근성           | `@axe-core/playwright` (E2E 안에서)                                                | serious 이상 위반                                                                 |
 
 결과 폴더:
 
 - `verification.md`: 단계별 PASS/FAIL/NOT RUN, 실패한 테스트, 스크린샷 목록, 사람 검토 체크리스트
 - `screenshots/<desktop|mobile>/<테스트>/NN-상태-설명.png`
+- `api/<desktop>/<테스트>/NN-api-....json`: API 응답 증거(상태 코드와 본문)
 - `failures/`: 실패한 테스트만의 trace·영상·실패 화면 (`npx playwright show-trace <trace.zip>`)
 - `e2e/playwright-report/`: HTML 보고서 (`npx playwright show-report <경로>`)
 - 각 단계 로그 (`eslint.log`, `build.log`, `unit.log`, `e2e.log` …)
 
 ## 3. 명령어
 
-| 명령                                                     | 하는 일                                           |
-| -------------------------------------------------------- | ------------------------------------------------- |
-| `./scripts/verify.sh [all]`                              | 전체 검증 (기본)                                  |
-| `./scripts/verify.sh lint\|build\|unit\|e2e`             | 해당 단계만 (e2e는 빌드 포함)                     |
-| `./scripts/check-spec.sh [--draft] docs/PRODUCT_SPEC.md` | 제품 명세 형식 검사                               |
-| `./scripts/rename-app.sh MyApp`                          | 앱 이름 변경 (화면 이름, 패키지 이름 `my-app`)    |
-| `./scripts/deploy.sh [preview\|prod]`                    | Vercel 배포 + 배포 URL에서 E2E (사람 지시 시에만) |
-| `./scripts/prune-evidence.sh`                            | 실행 증거 크기 목록 (삭제는 하지 않음)            |
-| `npm run dev` / `npm run format`                         | 개발 서버 / 코드 서식 자동 정리                   |
+| 명령                                                     | 하는 일                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| `./scripts/verify.sh [all]`                              | 전체 검증 (기본)                                              |
+| `./scripts/verify.sh lint\|build\|unit\|e2e`             | 해당 단계만 (e2e는 빌드 포함)                                 |
+| `./scripts/check-spec.sh [--draft] docs/PRODUCT_SPEC.md` | 제품 명세 형식 검사                                           |
+| `./scripts/rename-app.sh MyApp`                          | 앱 이름 변경 (화면 이름, 패키지 이름 `my-app`)                |
+| `./scripts/deploy.sh [preview\|prod]`                    | Vercel 배포 + 배포 URL에서 E2E (사람 지시 시에만)             |
+| `./scripts/prune-evidence.sh`                            | 실행 증거 크기 목록 (삭제는 하지 않음)                        |
+| `npm run dev` / `npm run format`                         | 개발 서버 / 코드 서식 자동 정리                               |
+| `npm run db:generate`                                    | `lib/db/schema.ts` 변경을 마이그레이션(`drizzle/`)으로 만들기 |
+| `npm run db:migrate`                                     | `DATABASE_URL`의 DB에 마이그레이션 적용 (프로덕션은 승인 후)  |
 
 ## 4. AI 에이전트 사용법: 명세 → 승인 → 구현
 
@@ -77,13 +81,41 @@ ln -s "$PWD/claude/global-skills/new-web-app" ~/.claude/skills/new-web-app
 
 `~/.local/bin`이 PATH에 없으면 `~/.zshrc`에 `export PATH="$HOME/.local/bin:$PATH"`를 추가합니다.
 
-명세 없이 바로 만들 수도 있습니다: `new-web-app MyApp` → `~/my-app`. 새 프로젝트에는 템플릿의 **마지막 커밋** 내용만 들어갑니다.
+명세 없이 바로 만들 수도 있습니다: `new-web-app MyApp` → `~/my-app` (서버 없이: `new-web-app MyApp --no-server`).
+명세의 `- 서버: 없음`이면 서버 예제(메모 API, DB)와 DB 패키지를 빼고 만듭니다. 새 프로젝트에는 템플릿의 **마지막 커밋** 내용만 들어갑니다.
 
-## 6. 배포: Vercel
+## 6. 서버와 DB
+
+템플릿에는 서버 예제 **메모**(`/memos`)가 들어 있습니다. 서버 컴포넌트가 DB를 읽고, Server Action이 추가·삭제하고, 같은 기능을 REST API로도 제공합니다.
+
+| 위치                                  | 역할                                                         |
+| ------------------------------------- | ------------------------------------------------------------ |
+| `lib/memos.ts`                        | 입력 검증(zod). 서버 액션과 API가 함께 씀                    |
+| `lib/db/schema.ts`, `lib/db/memos.ts` | 테이블 정의, DB 접근(Drizzle ORM). DB 접근은 `lib/db/`에서만 |
+| `app/memos/`                          | 화면(서버 컴포넌트)과 Server Action                          |
+| `app/api/memos/`, `app/api/health/`   | REST API, 헬스 체크                                          |
+| `drizzle/`                            | 마이그레이션 SQL (커밋함)                                    |
+
+**DB는 어디에 있나요?**
+
+| 환경                  | DB                                             | 설정                                    |
+| --------------------- | ---------------------------------------------- | --------------------------------------- |
+| 로컬 `npm run dev`    | PGlite(프로세스 안의 Postgres), `.data/pglite` | 없음. 처음 열 때 마이그레이션 자동 적용 |
+| 테스트·`verify.sh`·CI | PGlite, 메모리 또는 실행 폴더 안               | 없음. 실행마다 새 DB                    |
+| Vercel 배포           | Neon Postgres                                  | 사람이 연결(아래)                       |
+
+**스키마를 바꿀 때:** `lib/db/schema.ts` 수정 → `npm run db:generate` → 생긴 `drizzle/*.sql`을 읽고 함께 커밋. 이미 커밋한 마이그레이션 파일은 고치지 않습니다. `verify.sh`가 누락을 잡습니다.
+
+**Neon 연결 (최초 1회, 사람이 직접):** Vercel 대시보드 → 프로젝트 → Storage → Neon(Postgres) → 프로젝트에 연결. `DATABASE_URL`이 자동으로 들어가고, 다음 배포부터 빌드(`vercel-build`) 때 마이그레이션이 적용됩니다.
+
+- 미리보기 배포가 프로덕션 DB를 쓰지 않도록 Neon 연결 설정에서 미리보기용 브랜치를 켭니다.
+- 연결 전에 배포하면 사이트는 뜨지만 메모 화면은 "DB가 연결되지 않았습니다"를, `/api/health`는 503 `not-configured`를 돌려줍니다.
+
+## 7. 배포: Vercel
 
 1. 최초 1회, 사람이 터미널에서 직접: `npx vercel@66.6.0 login` → `npx vercel@66.6.0 link`.
 2. `./scripts/deploy.sh` (미리보기) 또는 `./scripts/deploy.sh prod` (프로덕션).
-   - `verify.sh all` PASS → `vercel deploy` → 배포된 URL에서 같은 E2E를 다시 돌려 스크린샷을 남깁니다.
+   - `verify.sh all` PASS → `vercel deploy` → 배포된 URL에서 같은 E2E를 다시 돌려 스크린샷을 남깁니다(데이터를 쓰는 테스트는 건너뜀) → `/api/health`로 DB 연결 확인.
    - 결과: `.artifacts/deploys/<시각>/deploy-verification.md`
 3. 선택: Vercel 대시보드에서 GitHub 저장소를 연결하면 PR마다 미리보기 URL이 자동으로 만들어집니다.
    - Vercel 미리보기는 기본으로 로그인 보호(Vercel Authentication)가 켜져 있어 테스트 브라우저가 앱을 볼 수 없습니다. 프로젝트 Settings → Deployment Protection → Protection Bypass for Automation에서 비밀 값을 만들고 `VERCEL_AUTOMATION_BYPASS_SECRET=<값> ./scripts/deploy.sh preview`로 실행합니다. 값이 없으면 E2E는 UNVERIFIED로 보고됩니다.
@@ -91,7 +123,7 @@ ln -s "$PWD/claude/global-skills/new-web-app" ~/.claude/skills/new-web-app
 
 비밀 값은 `.env.local`(Git 제외)과 Vercel 프로젝트의 환경 변수에만 넣습니다. 변수 이름은 `.env.example`에 값 없이 적습니다.
 
-## 7. 증거 해석과 한계
+## 8. 증거 해석과 한계
 
 - 스크린샷은 테스트가 assertion을 통과한 뒤 찍은 것입니다. 기능이 맞는지는 assertion과 로그로 판단하고, 스크린샷은 사람이 화면이 정상인지 확인하는 용도입니다.
 - 검증하는 브라우저는 Chromium뿐입니다. Safari·Firefox의 차이는 확인하지 않습니다(`playwright.config.ts`의 `projects`에 추가할 수 있지만 시간과 디스크를 더 씁니다).
@@ -99,7 +131,7 @@ ln -s "$PWD/claude/global-skills/new-web-app" ~/.claude/skills/new-web-app
 - 로컬 Node 버전과 CI(`.nvmrc`) 버전이 다르면 결과가 다를 수 있습니다.
 - 이 컴퓨터의 npm 10.9에는 패키지를 새로 추가할 때 오류(`Cannot read properties of null (reading 'edgesOut')`)가 나는 버그가 있습니다. Node 24(npm 11)를 쓰거나 `npx npm@11 install -E <패키지>`로 추가합니다. `npm ci`는 영향이 없습니다.
 
-## 8. 공간 관리
+## 9. 공간 관리
 
 - `node_modules`(수백 MB)와 `.next`는 프로젝트마다 생깁니다. Playwright 브라우저(`~/Library/Caches/ms-playwright`)는 모든 프로젝트가 함께 씁니다.
 - `./scripts/prune-evidence.sh`로 실행 증거 크기를 확인하고, 필요 없는 실행 폴더만 직접 지웁니다.

@@ -1,0 +1,14 @@
+# scripts/remove-server.sh가 지우는 서버 예제 파일·폴더 (서버: 없음으로 만든 프로젝트에서만 실행)
+app/api
+app/memos
+components/memo-form.tsx
+lib/db
+lib/http.ts
+lib/memos.ts
+lib/memos.test.ts
+test/db.ts
+e2e/memos.spec.ts
+drizzle
+drizzle.config.ts
+scripts/db-migrate.mjs
+scripts/vercel-build.mjs
