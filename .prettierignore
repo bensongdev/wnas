@@ -1,0 +1,8 @@
+.next/
+.artifacts/
+node_modules/
+package-lock.json
+next-env.d.ts
+public/
+docs/PRODUCT_SPEC.md
+docs/PRODUCT_SPEC_TEMPLATE.md

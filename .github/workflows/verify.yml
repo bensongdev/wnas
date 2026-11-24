@@ -1,0 +1,36 @@
+name: 웹 검증
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: 의존성 설치
+        run: npm ci --no-audit --no-fund
+      - name: 브라우저 설치 (Chromium)
+        run: npx playwright install --with-deps chromium
+      - name: 전체 검증 (린트, 빌드, 단위 테스트, E2E)
+        run: ./scripts/verify.sh all
+      - name: 검증 보고서를 실행 요약에 표시
+        if: always()
+        run: |
+          if [ -f .artifacts/latest-run ] && [ -f "$(cat .artifacts/latest-run)/verification.md" ]; then
+            cat "$(cat .artifacts/latest-run)/verification.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: 실패해도 증거 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-verification
+          path: .artifacts/runs/
+          retention-days: 7
