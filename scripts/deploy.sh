@@ -32,24 +32,42 @@ if [[ $VERIFY_EXIT -ne 0 ]]; then
 else
   VERIFY="PASS ($VERIFY_RUN)"
   echo "2/3 Vercel 배포 ($TARGET)..."
-  FLAGS="--yes"; if [[ "$TARGET" == prod ]]; then FLAGS="--prod --yes"; fi
-  # 표준 출력의 마지막 줄이 배포 URL이다. 진행 메시지(표준 오류)는 로그에만 남긴다.
-  # shellcheck disable=SC2086
-  URL="$($VERCEL deploy $FLAGS 2>"$OUT/vercel.log" | tail -1)"
+  # 환경을 반드시 명시한다: vercel 66은 --prod 없이도 프로덕션에 배포할 수 있다(2026-11-24 확인).
+  ENVIRONMENT=preview; if [[ "$TARGET" == prod ]]; then ENVIRONMENT=production; fi
+  $VERCEL deploy --yes --environment "$ENVIRONMENT" >"$OUT/vercel.log" 2>&1
+  # 로그에서 처음 나오는 *.vercel.app 주소가 이번 배포의 고유 URL이다(Inspect 줄은 vercel.com).
+  URL="$(grep -oE 'https://[A-Za-z0-9.-]+\.vercel\.app' "$OUT/vercel.log" | head -1)"
+  ACTUAL="$($VERCEL inspect "$URL" 2>&1 | sed -n 's/^[[:space:]]*target[[:space:]]*//p' | head -1)"
+  if [[ -n "$URL" && "$ACTUAL" != "$ENVIRONMENT" ]]; then
+    echo "경고: 요청한 환경($ENVIRONMENT)과 실제 배포 환경(${ACTUAL:-알 수 없음})이 다릅니다: $URL" >&2
+    URL=""; echo "환경 불일치: 요청 $ENVIRONMENT, 실제 ${ACTUAL:-알 수 없음}" >>"$OUT/vercel.log"
+  fi
   if [[ "$URL" =~ ^https:// ]]; then
     DEPLOY="PASS ($URL)"
     echo "3/3 배포 URL에서 E2E 검사..."
-    WNAS_BASE_URL="$URL" WNAS_E2E_OUTPUT="$OUT/e2e" npx playwright test >"$OUT/e2e.log" 2>&1
-    SMOKE_EXIT=$?
+    # 미리보기에 배포 보호(Vercel Authentication)가 켜져 있으면 로그인 페이지로 넘어간다.
+    # Vercel의 "Protection Bypass for Automation" 비밀 값을 VERCEL_AUTOMATION_BYPASS_SECRET로 주면 통과한다.
+    CODE="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$URL")"
+    if [[ "$CODE" == 30[27]*sso-api* && -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]]; then
+      echo "배포 URL이 Vercel 로그인으로 보호되어 E2E를 실행하지 않았습니다 ($CODE)" >"$OUT/e2e.log"
+      SMOKE_EXIT=99
+    else
+      WNAS_BASE_URL="$URL" WNAS_E2E_OUTPUT="$OUT/e2e" npx playwright test >"$OUT/e2e.log" 2>&1
+      SMOKE_EXIT=$?
+    fi
     REPORT=""; PASSED=0; FAILED=0; SHOTS=0
     while IFS='=' read -r k v; do
       case "$k" in REPORT) REPORT="$v" ;; PASSED) PASSED="$v" ;; FAILED) FAILED="$v" ;; SHOTS) SHOTS="$v" ;; esac
     done < <(node scripts/collect-evidence.mjs "$OUT/e2e/results.json" "$OUT")
-    if [[ "$REPORT" == ok && $SMOKE_EXIT -eq 0 && $FAILED -eq 0 && $PASSED -gt 0 ]]; then
+    if [[ $SMOKE_EXIT -eq 99 ]]; then
+      SMOKE="UNVERIFIED (배포 보호 때문에 실행 못 함: Vercel 프로젝트 설정 → Deployment Protection에서"
+      SMOKE="$SMOKE Protection Bypass for Automation 비밀 값을 만들어 VERCEL_AUTOMATION_BYPASS_SECRET로 주거나, 미리보기 보호를 끄세요)"
+      STATUS=1
+    elif [[ "$REPORT" == ok && $SMOKE_EXIT -eq 0 && $FAILED -eq 0 && $PASSED -gt 0 ]]; then
       SMOKE="PASS (통과 $PASSED, 스크린샷 ${SHOTS}장)"
     else
       SMOKE="FAIL (통과 $PASSED, 실패 $FAILED, e2e.log 참고)"; STATUS=1
-      if grep -qE '401|Authentication Required|vercel.com/login' "$OUT/e2e.log" 2>/dev/null; then
+      if grep -qE 'Log in to Vercel|Authentication Required' "$OUT/e2e.log" 2>/dev/null; then
         SMOKE="$SMOKE — 미리보기 배포 보호(Vercel Authentication) 때문일 수 있습니다"
       fi
     fi

@@ -86,7 +86,8 @@ ln -s "$PWD/claude/global-skills/new-web-app" ~/.claude/skills/new-web-app
    - `verify.sh all` PASS → `vercel deploy` → 배포된 URL에서 같은 E2E를 다시 돌려 스크린샷을 남깁니다.
    - 결과: `.artifacts/deploys/<시각>/deploy-verification.md`
 3. 선택: Vercel 대시보드에서 GitHub 저장소를 연결하면 PR마다 미리보기 URL이 자동으로 만들어집니다.
-   - 미리보기에 배포 보호(Vercel Authentication)가 켜져 있으면 `deploy.sh preview`의 E2E가 401로 실패할 수 있습니다.
+   - Vercel 미리보기는 기본으로 로그인 보호(Vercel Authentication)가 켜져 있어 테스트 브라우저가 앱을 볼 수 없습니다. 프로젝트 Settings → Deployment Protection → Protection Bypass for Automation에서 비밀 값을 만들고 `VERCEL_AUTOMATION_BYPASS_SECRET=<값> ./scripts/deploy.sh preview`로 실행합니다. 값이 없으면 E2E는 UNVERIFIED로 보고됩니다.
+   - 배포 환경은 항상 명시합니다(`--environment`). Vercel CLI 66은 `--prod` 없이도 프로덕션에 배포할 수 있어서, `deploy.sh`는 배포 후 실제 환경을 확인합니다.
 
 비밀 값은 `.env.local`(Git 제외)과 Vercel 프로젝트의 환경 변수에만 넣습니다. 변수 이름은 `.env.example`에 값 없이 적습니다.
 
